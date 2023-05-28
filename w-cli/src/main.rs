@@ -1,32 +1,46 @@
+use serde::{Serialize, Deserialize};
+
+use reqwest::blocking::Client;
+use serde_json::{self, Value, json};
+
 use ambient_weather_api::*;
 use std::env;
 
-use serde::{
-    Serialize, 
-    Deserialize,
-};
-
-#[derive(Serialize, Deserialize, Debug)]
-#[allow(unused)]
-struct Place {
-    country: String,
-    place: String,
+#[derive(Debug, Serialize, Deserialize)]
+struct PlaceApi {
+    #[serde(rename = "Endpoint")]
+    endpoint: String,
+    #[serde(rename = "Response")]
+    response: String,
 }
 
 #[allow(unused)]
-impl Place {
-    fn new(args: impl Iterator<Item = String>) -> Result<Place, &'static str> {
+impl PlaceApi {
+    fn new<T: Into<String>>(args: impl Iterator<Item = T>) -> Result<Self, &'static str> {
         let mut args = args.skip(1);
 
-        let country = args.next().ok_or("Country not found")?;
-        let place = args.next().ok_or("Place not found")?;
+        let country = args.next().ok_or("Country not found")?.into();
+        let city = args.next().ok_or("Place not found")?.into();
 
-        Ok(Place {
-            country,
-            place,
-        })
-    }
-}
+        let place_api = PlaceApi {
+            endpoint: format!("https://api.example.com/{}/{}", country, city),
+            response: String::new(), // Placeholder value
+        };
+
+        /*Ok(match place_api {
+            let connect = reqwest::blocking::get(format!()).unwrap();
+        })*/
+
+        let client = Client::new();
+        let response = client.get("https://jsonplaceholder.typicode.com/todos?userId=1").send().unwrap();
+
+        /*match response {
+            print!("{:?}", response.text().unwrap());
+        }*/
+
+        Ok((place_api))
+    } //
+} //
 
 fn main() {
     let api_credentials = AmbientWeatherAPICredentials {
