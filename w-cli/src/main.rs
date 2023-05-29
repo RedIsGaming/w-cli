@@ -1,113 +1,83 @@
-use serde::{Serialize, Deserialize};
-use reqwest::blocking::Client;
-use serde_json::{self, Value, json};
 use std::{thread, time::Duration, env};
+use serde::{Serialize, Deserialize};
+use serde_json::{Value, json, Error as SerdeJsonError};
+use reqwest::{Error as ReqwestError, blocking};
+//use tabular::{Row, Table};
 
-#[derive(Debug, Serialize, Deserialize)]
-struct PlaceApi {
-    #[serde(rename = "Endpoint")]
-    endpoint: String,
-    #[serde(rename = "Response")]
-    response: String,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct WeatherApi {
+    #[serde(rename = "NewEndpoint")]
     new_endpoint: bool,
+    #[serde(rename = "DeviceID")]
     device_id: usize,
+    #[serde(rename = "AppKey")]
     app_key: String,
+    #[serde(rename = "ApiKey")]
     api_key: String,
 }
 
 fn weather_api(args: WeatherApi, macaddress: &str) -> String {
-    let endpoint = args.new_endpoint
-        .map(|new_endpoint| if new_endpoint { "rt" } else { "api" })
-        .unwrap_or("api");
-
+    let endpoint = if args.new_endpoint { "rt" } else { "api" };
     let response = format!("https://{}.ambientweather.net/v1/devices/{}?applicationKey={}&apiKey={}", endpoint, macaddress, 
-    args.app_key, args.api_key);
-
-    return response;
-}
-
-fn raw_devicedata(args: WeatherApi, macaddress: String) -> Result<Value, reqwest::Error> {
-    let id = args.device_id;
-
-    let response: Value = reqwest::blocking::get(weather_api(args, &macaddress))?
-        .json()?;
-
-    thread::sleep(Duration::from_millis(1000));
-    return Ok(json!(response[id]))
-}
-
-fn devicedata(args: WeatherApi) -> Value {
-    let device_data = raw_devicedata(args, "".to_string()).unwrap();
-    return json!(device_data["lastData"])
-}
-
-fn weather_api_credentials() {
-    let credentials = WeatherApi {
-        api_key: env::var("w-api").expect("API-Key couldn't be found"),
-        app_key: env::var("w-app").expect("App-Key couldn't be found"),
-        device_id: 0,
-        new_endpoint: false,
-    };
-
-    let latest_data = devicedata(credentials);
-    //println!("{:?}", g);
-    //println!("{}", g["tempf"]);
-}
-
-#[allow(unused)]
-impl PlaceApi {
-    fn new<T: Into<String>>(args: impl Iterator<Item = T>) -> Result<Self, &'static str> {
-        let mut args = args.skip(1);
-
-        let country = args.next().ok_or("Country not found")?.into();
-        let city = args.next().ok_or("Place not found")?.into();
-
-        let place_api = PlaceApi {
-            endpoint: format!("https://api.example.com/{}/{}", country, city),
-            response: String::new(), // Placeholder value
-        };
-
-        Ok((place_api))
-    } //
-} //
-
-//https://jsonplaceholder.typicode.com/todos?userId=1
-
-fn location_api() -> reqwest::blocking::Response {
-    let client = Client::new();
-    let response = client.get("https://rt.ambientweather.net/v1/devices{?apiKey,applicationKey}").send().unwrap();
-
-    match response.status() {
-        reqwest::StatusCode::OK => println!("Successfully connected to the API with statuscode: {}", response.status()),
-        _ => println!("Error! Couldn't retrieve a successfull connection. The statuscode was: {}", response.status()),
-    }
+        args.app_key.trim(), args.api_key);
 
     response
 }
 
+fn raw_devicedata(args: WeatherApi, macaddress: String) -> Result<Value, ReqwestError> {
+    let id = args.device_id;
+    let response: Value = blocking::get(weather_api(args, &macaddress))?
+        .json()?;
+
+    thread::sleep(Duration::from_millis(1000));
+
+    match response["devices"][0]["info"]["name"].as_str() {
+        Some(name) => println!("The name of the device is: {}.", name),
+        None => println!("Couldn't find the name of the device."),
+    }
+    
+    Ok(json!(response[id]))
+}    
+
+fn devicedata(args: WeatherApi) -> Result<Value, SerdeJsonError> {
+    let device_data = raw_devicedata(args, "".to_string())
+        .expect("Couldn't get the device data.")
+        .to_owned();
+
+    Ok(json!(device_data["lastData"]))
+}
+
+fn convert_macaddress() -> u64 {
+    let macaddress = env::var("w-device")
+        .expect("Couldn't retrieve the MAC address.")
+        .to_owned();
+
+    let replace_colon = macaddress
+        .replace(":", "")
+        .replace("-", "");
+
+    let to_u64 = u64::from_str_radix(&replace_colon, 16);
+    
+    match to_u64 {
+        Ok(to_usize) => println!("MAC address as usize: {}.", to_usize as usize),
+        Err(ref err) => eprintln!("Failed to convert the MAC address as usize. {}", *err),
+    }
+
+    to_u64.unwrap()
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    location_api();
-    weather_api_credentials();
+    let credentials = WeatherApi {
+        new_endpoint: false,
+        device_id: convert_macaddress() as usize,
+        app_key: env::var("w-app")?.to_owned(),
+        api_key: env::var("w-api")?.to_owned(),
+    };
 
-    let data = r#"
-    {
-        "name": "John Doe",
-        "age": 43,
-        "phones": [
-            "+44 1234567",
-            "+44 2345678"
-        ]
-    }"#;
-
-    let v: Value = serde_json::from_str(data)?;
-    println!("Please call {} at the number {}", v["name"], v["phones"][0]);
-
-    let j = serde_json::to_string(&v)?;
-    println!("{}", j);
+    match devicedata(credentials) {
+        Ok(value) => println!("{}", value["tempf"]),
+        Err(err) => eprintln!("Error! Couldn't retrieve the credentials. {}", err),
+    }
 
     Ok(())
-} //
+}

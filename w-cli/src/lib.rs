@@ -10,8 +10,8 @@ pub struct Location {
     pub city: String,
 }
 
-fn location(places: &Place) -> (String, String) {
-    (places.country.clone(), places.city.clone())
+fn location(places: &Place) -> (&String, &String) {
+    (&places.country, &places.city)
 }
 
 impl From<TempDisplay> for Location {
@@ -22,11 +22,11 @@ impl From<TempDisplay> for Location {
             .and_then(|(_, t)| Some(&t.places))
             .unwrap();
 
-        let (country, city) = location(&places_location);
+        let (country, city) = location(places_location);
 
         Self { 
-            country,
-            city, 
+            country: country.clone(),
+            city: city.clone(), 
         }
     }
 }
@@ -44,13 +44,15 @@ pub struct Temperature {
     pub wind_gust: u32,
 }
 
-//Fix this too
-fn temperature(weather: &Weather) -> (String, String, f32, f32, u32, u32, f32, u32) {
-    (weather.lat.clone(), weather.long.clone(), weather.temp.clone(), weather.feels_like.clone(), 
-    weather.humid.clone(), weather.wind_dir.clone(), weather.wind_speed.clone(), weather.wind_gust.clone())
+fn temperature(weather: &Weather) -> (&String, &String, f32, f32, u32, u32, f32, u32) {
+    (
+        &weather.lat, &weather.long, 
+        weather.temp, weather.feels_like, 
+        weather.humid, weather.wind_dir, 
+        weather.wind_speed, weather.wind_gust
+    )
 }
 
-//Also fix this
 impl From<TempDisplay> for Temperature {
     fn from(args: TempDisplay) -> Self {
         let weather_temperature = &args.temp
@@ -59,12 +61,18 @@ impl From<TempDisplay> for Temperature {
             .and_then(|(_, t)| Some(&t.weather))
             .unwrap();
 
-        let (lat, long, temp, feels_like, 
-            humid, wind_dir, wind_speed, wind_gust) = temperature(&weather_temperature);
+        //Fix this too
+        let (
+                lat, long, 
+                temp, feels_like, 
+                humid, wind_dir, 
+                wind_speed, wind_gust
+            ) = temperature(&weather_temperature);
 
+        //Also fix this
         Self { 
-            lat,
-            long,
+            lat: lat.clone(),
+            long: long.clone(),
             temp,
             feels_like,
             humid,
@@ -72,5 +80,5 @@ impl From<TempDisplay> for Temperature {
             wind_speed,
             wind_gust,
         }
-    }
-}
+    } //
+} //
